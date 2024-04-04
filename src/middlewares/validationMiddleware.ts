@@ -12,30 +12,32 @@ const cepRegex = /^\d{5}-\d{3}$/;
 // Create the Joi schema for IProfileData
 const profileSchema = Joi.object({
     userType: Joi.string().valid('Pessoa física', 'Pessoa jurídica').required(),
-    cnpj: Joi.string().pattern(cnpjRegex).when('userType', { is: 'Pessoa jurídica', then: Joi.required() }),
-    cpf: Joi.string().pattern(cpfRegex).when('userType', { is: 'Pessoa física', then: Joi.required() }),
-    name: Joi.string().required(),
+    cnpj: Joi.when('userType', { is: 'Pessoa jurídica', then: Joi.string().pattern(cnpjRegex).required(), otherwise: Joi.forbidden() }),
+    cpf: Joi.when('userType', { is: 'Pessoa física', then: Joi.string().pattern(cpfRegex).required(), otherwise: Joi.forbidden() }),
+    name: Joi.string().trim().required(),
     cellphone: Joi.string().pattern(cellphoneRegex).required(),
-    phone: Joi.string().pattern(phoneRegex).optional(),
-    email: Joi.string().pattern(emailRegex).required(),
+    phone: Joi.string().pattern(phoneRegex).optional().allow('', null),
+    email: Joi.string().trim().lowercase().email().pattern(emailRegex).required(),
     confirmEmail: Joi.any().valid(Joi.ref('email')).required(),
     cep: Joi.string().pattern(cepRegex).required(),
-    street: Joi.string().required(),
+    street: Joi.string().trim().required(),
     number: Joi.number().integer().min(1).required(),
-    additionalInfo: Joi.string().optional(),
-    city: Joi.string().required(),
-    neighborhood: Joi.string().required(),
-    state: Joi.string().required(),
-    agreeToTerms: Joi.boolean().valid(true).required(), // Must be true to proceed
-});
+    additionalInfo: Joi.string().trim().optional().allow('', null),
+    city: Joi.string().trim().required(),
+    neighborhood: Joi.string().trim().required(),
+    state: Joi.string().trim().required(),
+    agreeToTerms: Joi.boolean().valid(true).required()
+}).with('email', 'confirmEmail');
+
 
 export const validateProfileData = (req: Request, res: Response, next: NextFunction) => {
-    const { error } = profileSchema.validate(req.body, { abortEarly: false });
+    const validationResult = profileSchema.validate(req.body, { abortEarly: false, stripUnknown: true });
 
-    if (error) {
-        const errors = error.details.map(detail => detail.message);
+    if (validationResult.error) {
+        const errors = validationResult.error.details.map(detail => detail.message);
         return res.status(400).json({ errors });
     } else {
+        req.body = validationResult.value;
         next();
     }
 };
